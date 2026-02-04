@@ -1,13 +1,21 @@
-# NewsData.io – Pipeline Bronze + SQLite
+# NewsData.io & Wikipedia – Pipeline Bronze + SQLite
 
-Exemplo **simples e direto** para ingestão de dados:
+Exemplo **simples e direto** para ingestão de dados de duas fontes:
 
+**NewsData.io:**
 1. Definir API Key
 2. Fazer request na NewsData.io
 3. Salvar JSON (raw)
 4. Converter JSON → pandas DataFrame
 5. Salvar CSV (bronze tabular)
 6. Carregar para base de dados SQLite (opcional)
+
+**Wikipedia (Web Scraping):**
+1. Escolher idioma (Portugues ou Ingles)
+2. Escolher modo (tema, aleatorio ou URLs manuais)
+3. Extrair titulo + resumo de ate 10 paginas
+4. Salvar JSON (raw) + CSV (bronze tabular)
+5. Carregar para base de dados SQLite (opcional)
 
 ## Arquitetura Medallion
 
@@ -29,23 +37,28 @@ Exemplo **simples e direto** para ingestão de dados:
 
 ```
 newsdata_api/
-├── main.py                    ← Ponto de entrada
+├── main.py                    ← Ponto de entrada (NewsData.io)
 ├── src/
 │   ├── bronze/
 │   │   ├── __init__.py
-│   │   └── ingest.py          ← Script de ingestão
+│   │   ├── ingest.py          ← Ingestão NewsData.io
+│   │   └── wiki_scraper.py    ← Web Scraping Wikipedia
 │   └── db/
 │       ├── __init__.py
 │       └── loader.py           ← Carregamento para SQLite
 ├── collection/
 │   └── bronze/                ← Dados coletados
 │       ├── newsdata_{endpoint}_raw_{timestamp}.json
-│       └── newsdata_{endpoint}_tabular_{timestamp}.csv
+│       ├── newsdata_{endpoint}_tabular_{timestamp}.csv
+│       ├── wiki_scrape_raw_{timestamp}.json
+│       └── wiki_scrape_tabular_{timestamp}.csv
 ├── db/
-│   └── newsdata.db            ← Base de dados SQLite (gerado)
+│   ├── newsdata.db            ← Base de dados SQLite (gerado)
+│   └── wiki.db                ← Base de dados Wikipedia (gerado)
 ├── tests/
 │   ├── test_bronze.py
-│   └── test_db.py
+│   ├── test_db.py
+│   └── test_wiki_scraper.py
 ├── .env                       ← API Key (não commitar!)
 ├── .gitignore
 ├── requirements.txt
@@ -118,9 +131,24 @@ python -m src.bronze.ingest --query "inteligência artificial"
 python -m src.bronze.ingest --size 20
 ```
 
+### Wikipedia (Web Scraping)
+
+```bash
+python -m src.bronze.wiki_scraper
+```
+
+O script apresenta menus interativos:
+
+1. **Idioma** — Portugues (`pt.wikipedia.org`) ou Ingles (`en.wikipedia.org`)
+2. **Modo de scraping:**
+   - `[1]` Pesquisar por tema — introduzir termo de pesquisa
+   - `[2]` Paginas aleatorias — 10 paginas aleatorias
+   - `[3]` URLs manuais — introduzir ate 10 URLs da Wikipedia
+3. **Carregar na DB** — no final, pergunta se quer gravar em `db/wiki.db`
+
 ### Carregar para SQLite (standalone)
 
-Carrega todos os CSV existentes na base de dados:
+Carrega todos os CSV de noticias existentes na base de dados:
 
 ```bash
 python -m src.db.loader
@@ -140,6 +168,8 @@ python -m src.db.loader --db-path outro_caminho/dados.db
 |----------|-----------|
 | `newsdata_{endpoint}_raw_{timestamp}.json` | JSON original da API (raw) |
 | `newsdata_{endpoint}_tabular_{timestamp}.csv` | Dados tabulares (DataFrame) |
+| `wiki_scrape_raw_{timestamp}.json` | JSON original Wikipedia (raw) |
+| `wiki_scrape_tabular_{timestamp}.csv` | Dados tabulares Wikipedia |
 
 ### Base de dados (`db/newsdata.db`)
 
@@ -166,17 +196,33 @@ Tabela `artigos` com as seguintes colunas:
 
 Duplicados são ignorados automaticamente (`INSERT OR IGNORE` por `article_id`).
 
-## Pipeline
+### Base de dados (`db/wiki.db`)
 
+Tabela `paginas` com as seguintes colunas:
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `pageid` | TEXT (PK) | Identificador da pagina Wikipedia |
+| `titulo` | TEXT | Titulo da pagina |
+| `resumo` | TEXT | Primeiro paragrafo (extract) |
+| `url` | TEXT | URL da pagina |
+| `modo` | TEXT | Modo de scraping (tema, aleatorio, urls) |
+| `timestamp_scrape` | TEXT | Timestamp da extração |
+| `loaded_at` | TEXT | Timestamp de carregamento |
+
+Duplicados são ignorados automaticamente (`INSERT OR IGNORE` por `pageid`).
+
+## Pipelines
+
+**NewsData.io:**
 ```
 API → JSON (raw) → DataFrame → CSV → SQLite (opcional)
 ```
 
-1. **Request na API** → Obtém dados brutos
-2. **Salva JSON** → Preserva resposta original
-3. **Normaliza** → Extrai campos relevantes
-4. **Salva CSV** → Dados tabulares
-5. **Carrega SQLite** → Base de dados consultável
+**Wikipedia:**
+```
+Wikipedia API → JSON (raw) → DataFrame → CSV → SQLite (opcional)
+```
 
 ## Testes
 
