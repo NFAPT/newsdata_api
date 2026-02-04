@@ -398,7 +398,23 @@ def main() -> int:
 
    Pipeline: API → JSON (raw) → DataFrame → CSV
 """)
-        
+
+        # Perguntar se quer carregar na DB
+        resposta = input("🗄️  Carregar dados na base de dados SQLite? (s/N): ").strip().lower()
+        if resposta == "s":
+            import sqlite3
+            from src.db.loader import criar_tabela, carregar_csv as db_carregar_csv
+
+            db_dir = project_root / "db"
+            db_dir.mkdir(parents=True, exist_ok=True)
+            db_path = db_dir / "newsdata.db"
+
+            conn = sqlite3.connect(db_path)
+            criar_tabela(conn)
+            db_carregar_csv(conn, csv_path, args.endpoint)
+            conn.close()
+            print(f"✅ Dados carregados em {db_path}")
+
         return 0
         
     except ValueError as e:

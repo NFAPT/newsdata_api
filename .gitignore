@@ -31,6 +31,9 @@ collection/bronze/*.json
 collection/bronze/*.csv
 !collection/bronze/.gitkeep
 
+# Base de dados SQLite
+db/*.db
+
 # Pytest
 .pytest_cache/
 .coverage
