@@ -7,3 +7,7 @@ pytest>=7.4.0
 # Silver/Gold Layer
 textblob>=0.18.0
 langdetect>=1.0.9
+
+# Dashboard
+streamlit>=1.30.0
+plotly>=5.18.0
