@@ -539,8 +539,25 @@ def main() -> int:
             conn = sqlite3.connect(db_path)
             criar_tabela(conn)
             db_carregar_csv(conn, csv_path, args.endpoint)
-            conn.close()
             print(f"[OK] Dados carregados em {db_path}")
+
+            # Perguntar se quer processar Silver
+            resposta_silver = input("\n[SILVER] Processar camada Silver (limpeza + NLP)? (s/N): ").strip().lower()
+            if resposta_silver == "s":
+                from src.silver.transform import processar_silver
+
+                print("\n[SILVER] A processar artigos...")
+                n_silver = processar_silver(conn, verbose=True)
+
+                # Perguntar se quer processar Gold
+                resposta_gold = input("\n[GOLD] Calcular agregacoes Gold? (s/N): ").strip().lower()
+                if resposta_gold == "s":
+                    from src.gold.aggregate import processar_gold
+
+                    print("\n[GOLD] A calcular agregacoes...")
+                    stats = processar_gold(conn, verbose=True)
+
+            conn.close()
 
         return 0
 
