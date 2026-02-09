@@ -1,22 +1,13 @@
-# NewsData.io & Wikipedia – Pipeline Bronze + SQLite
+# NewsData.io – Pipeline Medallion Completo
 
-Exemplo **simples e direto** para ingestão de dados de duas fontes:
+Pipeline de dados completo com arquitetura **Medallion** (Bronze → Silver → Gold) e **Dashboard Streamlit**.
 
-**NewsData.io:**
-1. Definir API Key
-2. Fazer request na NewsData.io
-3. Salvar JSON (raw)
-4. Converter JSON → pandas DataFrame
-5. Salvar CSV (bronze tabular)
-6. Salvar Parquet (bronze tabular)
-7. Carregar para base de dados SQLite (opcional)
+## Funcionalidades
 
-**Wikipedia (Web Scraping):**
-1. Escolher idioma (Portugues ou Ingles)
-2. Escolher modo (tema, aleatorio ou URLs manuais)
-3. Extrair titulo + resumo de ate 10 paginas
-4. Salvar JSON (raw) + CSV (bronze tabular)
-5. Carregar para base de dados SQLite (opcional)
+- **Bronze Layer** — Ingestão de dados da API NewsData.io
+- **Silver Layer** — Limpeza, NLP (sentimento, entidades, língua)
+- **Gold Layer** — Agregações e KPIs para análise
+- **Dashboard** — Interface Streamlit para executar pipeline e visualizar dados
 
 ## Arquitetura Medallion
 
@@ -27,40 +18,55 @@ Exemplo **simples e direto** para ingestão de dados de duas fontes:
 │   🥉 BRONZE     │   🥈 SILVER     │   🥇 GOLD                   │
 │   (Raw Data)    │   (Cleaned)     │   (Business Ready)          │
 ├─────────────────┼─────────────────┼─────────────────────────────┤
-│ ✅ Este projeto │ • Dados limpos  │ • Agregações                │
-│ • JSON da API   │ • Validados     │ • KPIs                      │
-│ • CSV tabular   │ • Tipados       │ • Prontos para análise      │
-│ • SQLite DB     │                 │                             │
+│ ✅ JSON da API  │ ✅ Dados limpos │ ✅ Agregações               │
+│ ✅ CSV tabular  │ ✅ Sentimento   │ ✅ Daily Summary            │
+│ ✅ Parquet      │ ✅ Entidades    │ ✅ Source Stats             │
+│ ✅ SQLite DB    │ ✅ Língua       │ ✅ Trending Topics          │
+│ ✅ Deduplicação │ ✅ Categorias   │ ✅ Sentiment Timeline       │
 └─────────────────┴─────────────────┴─────────────────────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │  📊 DASHBOARD   │
+                    │   Streamlit     │
+                    └─────────────────┘
 ```
 
 ## Estrutura do Projeto
 
 ```
 newsdata_api/
-├── main.py                    ← Ponto de entrada (NewsData.io)
+├── app.py                     ← Dashboard Streamlit
+├── main.py                    ← Pipeline CLI
 ├── src/
 │   ├── bronze/
 │   │   ├── __init__.py
 │   │   ├── ingest.py          ← Ingestão NewsData.io
 │   │   └── wiki_scraper.py    ← Web Scraping Wikipedia
+│   ├── silver/
+│   │   ├── __init__.py
+│   │   └── transform.py       ← Transformações NLP
+│   ├── gold/
+│   │   ├── __init__.py
+│   │   └── aggregate.py       ← Agregações e KPIs
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── text_processing.py ← Utilitários de texto
 │   └── db/
 │       ├── __init__.py
-│       └── loader.py           ← Carregamento para SQLite
+│       └── loader.py          ← Carregamento para SQLite
 ├── collection/
 │   └── bronze/                ← Dados coletados
 │       ├── newsdata_{endpoint}_raw_{timestamp}.json
 │       ├── newsdata_{endpoint}_tabular_{timestamp}.csv
-│       ├── newsdata_{endpoint}_tabular_{timestamp}.parquet
-│       ├── wiki_scrape_raw_{timestamp}.json
-│       └── wiki_scrape_tabular_{timestamp}.csv
+│       └── newsdata_{endpoint}_tabular_{timestamp}.parquet
 ├── db/
-│   ├── newsdata.db            ← Base de dados SQLite (gerado)
-│   └── wiki.db                ← Base de dados Wikipedia (gerado)
+│   └── newsdata.db            ← Base de dados SQLite (gerado)
 ├── tests/
 │   ├── test_bronze.py
 │   ├── test_db.py
-│   └── test_wiki_scraper.py
+│   ├── test_silver.py         ← Testes Silver layer
+│   └── test_gold.py           ← Testes Gold layer
 ├── .env                       ← API Key (não commitar!)
 ├── .gitignore
 ├── requirements.txt
@@ -93,73 +99,47 @@ pip install -r requirements.txt
 
 ## Utilização
 
-### Pipeline Bronze (ingestão)
+### Dashboard Streamlit (Recomendado)
 
 ```bash
-python -m src.bronze.ingest
+streamlit run app.py
 ```
 
-No final da execução, é perguntado se queres carregar os dados na base de dados SQLite.
+Abre `http://localhost:8501` no browser. O dashboard permite:
+- Executar pipeline completo via sidebar
+- Selecionar endpoint e tamanho
+- Visualizar KPIs, gráficos e tabelas
+- Filtrar por fonte e sentimento
+
+### Pipeline CLI
+
+```bash
+python main.py
+```
+
+Menu interativo para:
+1. Escolher endpoint (latestPT, tech, crypto, market)
+2. Definir tamanho (1-10 artigos)
+3. Processar Silver layer (limpeza + NLP)
+4. Calcular Gold layer (agregações)
 
 ### Endpoints disponíveis
 
-```bash
-# Notícias de Portugal (default)
-python -m src.bronze.ingest
+| Endpoint | Descrição |
+|----------|-----------|
+| `latestPT` | Últimas notícias de Portugal |
+| `tech` | Notícias de tecnologia |
+| `crypto` | Notícias de criptomoedas |
+| `market` | Notícias de mercados globais |
 
-# Tech news
-python -m src.bronze.ingest --endpoint tech
-
-# Crypto news
-python -m src.bronze.ingest --endpoint crypto
-
-# Global market news
-python -m src.bronze.ingest --endpoint market
-```
-
-### Opções adicionais
+### Módulos individuais
 
 ```bash
-# Notícias de outro país
-python -m src.bronze.ingest --country br
+# Apenas Bronze (ingestão)
+python -m src.bronze.ingest --endpoint tech --size 5
 
-# Notícias de uma categoria
-python -m src.bronze.ingest --category technology
-
-# Pesquisa por termo
-python -m src.bronze.ingest --query "inteligência artificial"
-
-# Mais resultados
-python -m src.bronze.ingest --size 20
-```
-
-### Wikipedia (Web Scraping)
-
-```bash
-python -m src.bronze.wiki_scraper
-```
-
-O script apresenta menus interativos:
-
-1. **Idioma** — Portugues (`pt.wikipedia.org`) ou Ingles (`en.wikipedia.org`)
-2. **Modo de scraping:**
-   - `[1]` Pesquisar por tema — introduzir termo de pesquisa
-   - `[2]` Paginas aleatorias — 10 paginas aleatorias
-   - `[3]` URLs manuais — introduzir ate 10 URLs da Wikipedia
-3. **Carregar na DB** — no final, pergunta se quer gravar em `db/wiki.db`
-
-### Carregar para SQLite (standalone)
-
-Carrega todos os CSV de noticias existentes na base de dados:
-
-```bash
+# Carregar CSV existentes para SQLite
 python -m src.db.loader
-```
-
-Com caminho personalizado:
-
-```bash
-python -m src.db.loader --db-path outro_caminho/dados.db
 ```
 
 ## Output
@@ -169,75 +149,112 @@ python -m src.db.loader --db-path outro_caminho/dados.db
 | Ficheiro | Descrição |
 |----------|-----------|
 | `newsdata_{endpoint}_raw_{timestamp}.json` | JSON original da API (raw) |
-| `newsdata_{endpoint}_tabular_{timestamp}.csv` | Dados tabulares CSV (DataFrame) |
-| `newsdata_{endpoint}_tabular_{timestamp}.parquet` | Dados tabulares Parquet (DataFrame) |
-| `wiki_scrape_raw_{timestamp}.json` | JSON original Wikipedia (raw) |
-| `wiki_scrape_tabular_{timestamp}.csv` | Dados tabulares Wikipedia |
+| `newsdata_{endpoint}_tabular_{timestamp}.csv` | Dados tabulares CSV |
+| `newsdata_{endpoint}_tabular_{timestamp}.parquet` | Dados tabulares Parquet |
+
+Artigos duplicados são filtrados automaticamente antes de gravar.
 
 ### Base de dados (`db/newsdata.db`)
 
-Tabela `artigos` com as seguintes colunas:
+#### Tabela `artigos` (Bronze)
 
 | Coluna | Tipo | Descrição |
 |--------|------|-----------|
-| `article_id` | TEXT (PK) | Identificador único do artigo |
-| `title` | TEXT | Título |
+| `article_id` | TEXT (PK) | Identificador único |
+| `title` | TEXT | Título original |
 | `description` | TEXT | Resumo |
-| `content` | TEXT | Conteúdo (limitado no plano gratuito) |
-| `source_id` | TEXT | Identificador da fonte |
-| `source_name` | TEXT | Nome da fonte |
-| `source_url` | TEXT | URL da fonte |
-| `creator` | TEXT | Autor(es) |
+| `source_id` | TEXT | ID da fonte |
 | `pubDate` | TEXT | Data de publicação |
 | `category` | TEXT | Categoria(s) |
-| `country` | TEXT | País |
-| `language` | TEXT | Idioma |
 | `link` | TEXT | URL do artigo |
-| `image_url` | TEXT | URL da imagem |
-| `endpoint` | TEXT | Endpoint de origem (latestPT, crypto, etc.) |
-| `loaded_at` | TEXT | Timestamp de carregamento |
+| `endpoint` | TEXT | Endpoint de origem |
 
-Duplicados são ignorados automaticamente (`INSERT OR IGNORE` por `article_id`).
-
-### Base de dados (`db/wiki.db`)
-
-Tabela `paginas` com as seguintes colunas:
+#### Tabela `artigos_silver` (Silver)
 
 | Coluna | Tipo | Descrição |
 |--------|------|-----------|
-| `pageid` | TEXT (PK) | Identificador da pagina Wikipedia |
-| `titulo` | TEXT | Titulo da pagina |
-| `resumo` | TEXT | Primeiro paragrafo (extract) |
-| `url` | TEXT | URL da pagina |
-| `modo` | TEXT | Modo de scraping (tema, aleatorio, urls) |
-| `timestamp_scrape` | TEXT | Timestamp da extração |
-| `loaded_at` | TEXT | Timestamp de carregamento |
+| `article_id` | TEXT (PK) | Identificador único |
+| `title_clean` | TEXT | Título limpo (sem HTML) |
+| `sentiment_polarity` | REAL | Polaridade (-1 a 1) |
+| `sentiment_label` | TEXT | positive/negative/neutral |
+| `entities_persons` | TEXT | Pessoas detectadas (JSON) |
+| `entities_locations` | TEXT | Locais detectados (JSON) |
+| `language_detected` | TEXT | Língua detectada (pt/en) |
+| `category_primary` | TEXT | Categoria normalizada |
+| `pub_date` | TEXT | Data formatada |
+| `word_count` | INTEGER | Contagem de palavras |
 
-Duplicados são ignorados automaticamente (`INSERT OR IGNORE` por `pageid`).
+#### Tabelas Gold (Agregações)
 
-## Pipelines
+| Tabela | Descrição |
+|--------|-----------|
+| `gold_daily_summary` | Resumo diário (artigos, sentimento, fontes) |
+| `gold_source_stats` | Estatísticas por fonte |
+| `gold_trending_topics` | Palavras mais frequentes |
+| `gold_sentiment_timeline` | Evolução do sentimento |
+| `gold_category_matrix` | Matriz categoria × sentimento |
 
-**NewsData.io:**
+## Pipeline Completo
+
 ```
-API → JSON (raw) → DataFrame → CSV + Parquet → SQLite (opcional)
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  NewsData   │    │   BRONZE    │    │   SILVER    │    │    GOLD     │
+│    API      │ ─► │  Raw Data   │ ─► │   NLP +     │ ─► │ Agregações  │
+│             │    │  + Dedup    │    │  Limpeza    │    │   + KPIs    │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+                                                                │
+                                                                ▼
+                                                      ┌─────────────────┐
+                                                      │   Dashboard     │
+                                                      │   Streamlit     │
+                                                      └─────────────────┘
 ```
 
-**Wikipedia:**
-```
-Wikipedia API → JSON (raw) → DataFrame → CSV → SQLite (opcional)
-```
+### Silver Layer — Transformações
+
+- Limpeza de HTML e caracteres especiais
+- Análise de sentimento (TextBlob)
+- Extração de entidades (pessoas, locais, organizações)
+- Detecção de língua (langdetect)
+- Normalização de categorias
+- Validação de URLs
+
+### Gold Layer — Agregações
+
+- **Daily Summary** — artigos, sentimento médio, fontes por dia
+- **Source Stats** — estatísticas por fonte
+- **Trending Topics** — palavras mais frequentes
+- **Sentiment Timeline** — evolução do sentimento
+- **Category Matrix** — distribuição categoria × sentimento
 
 ## Testes
 
 ```bash
+# Todos os testes (132 testes)
 python -m pytest tests/ -v
+
+# Apenas Silver
+python -m pytest tests/test_silver.py -v
+
+# Apenas Gold
+python -m pytest tests/test_gold.py -v
 ```
 
-## Limites da API (Plano Bronze)
+## Limites da API (Plano Gratuito)
 
 - 200 pedidos/dia
+- Máximo 10 artigos por pedido
 - Apenas endpoint `/latest`
-- Sem acesso a arquivo histórico
+
+## Stack
+
+- **Python 3.10+**
+- **pandas** — manipulação de dados
+- **TextBlob** — análise de sentimento
+- **langdetect** — detecção de língua
+- **Streamlit** — dashboard web
+- **Plotly** — gráficos interativos
+- **SQLite** — armazenamento
 
 ## Licença
 
