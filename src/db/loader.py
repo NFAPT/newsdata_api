@@ -78,11 +78,11 @@ def carregar_csv(conn: sqlite3.Connection, csv_path: Path, endpoint: str) -> int
     try:
         df = pd.read_csv(csv_path, encoding="utf-8")
     except pd.errors.EmptyDataError:
-        print(f"   ⚠️  CSV vazio: {csv_path.name}")
+        print(f"   [AVISO] CSV vazio: {csv_path.name}")
         return 0
 
     if df.empty:
-        print(f"   ⚠️  CSV vazio: {csv_path.name}")
+        print(f"   [AVISO] CSV vazio: {csv_path.name}")
         return 0
 
     loaded_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -114,7 +114,7 @@ def carregar_csv(conn: sqlite3.Connection, csv_path: Path, endpoint: str) -> int
     conn.commit()
 
     inseridos = cursor.rowcount
-    print(f"   📥 {csv_path.name}: {inseridos} registos inseridos")
+    print(f"   [LOAD] {csv_path.name}: {inseridos} registos inseridos")
     return inseridos
 
 
@@ -146,10 +146,10 @@ def carregar_todos_csv(db_path: Path) -> int:
     ficheiros = sorted(csv_dir.glob("*_tabular_*.csv"))
 
     if not ficheiros:
-        print("⚠️  Nenhum ficheiro CSV encontrado em collection/bronze/")
+        print("[AVISO] Nenhum ficheiro CSV encontrado em collection/bronze/")
         return 0
 
-    print(f"📂 Encontrados {len(ficheiros)} ficheiro(s) CSV\n")
+    print(f"[DIR] Encontrados {len(ficheiros)} ficheiro(s) CSV\n")
 
     # Criar pasta db se necessário
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,7 +164,7 @@ def carregar_todos_csv(db_path: Path) -> int:
 
     conn.close()
 
-    print(f"\n✅ Total: {total} registos inseridos em {db_path}")
+    print(f"\n[OK] Total: {total} registos inseridos em {db_path}")
     return total
 
 
@@ -189,7 +189,7 @@ def main() -> int:
     """Carrega todos os CSV da collection bronze para SQLite."""
 
     print("\n" + "=" * 60)
-    print("    🗄️  NEWSDATA.IO – CARREGAR PARA SQLITE")
+    print("    NEWSDATA.IO - CARREGAR PARA SQLITE")
     print("=" * 60 + "\n")
 
     args = parse_args()
@@ -203,7 +203,7 @@ def main() -> int:
             print("\nNenhum registo novo inserido.")
         return 0
     except Exception as e:
-        print(f"\n❌ Erro: {e}")
+        print(f"\n[ERRO] {e}")
         return 1
 
 

@@ -8,7 +8,8 @@ Exemplo **simples e direto** para ingestão de dados de duas fontes:
 3. Salvar JSON (raw)
 4. Converter JSON → pandas DataFrame
 5. Salvar CSV (bronze tabular)
-6. Carregar para base de dados SQLite (opcional)
+6. Salvar Parquet (bronze tabular)
+7. Carregar para base de dados SQLite (opcional)
 
 **Wikipedia (Web Scraping):**
 1. Escolher idioma (Portugues ou Ingles)
@@ -50,6 +51,7 @@ newsdata_api/
 │   └── bronze/                ← Dados coletados
 │       ├── newsdata_{endpoint}_raw_{timestamp}.json
 │       ├── newsdata_{endpoint}_tabular_{timestamp}.csv
+│       ├── newsdata_{endpoint}_tabular_{timestamp}.parquet
 │       ├── wiki_scrape_raw_{timestamp}.json
 │       └── wiki_scrape_tabular_{timestamp}.csv
 ├── db/
@@ -167,7 +169,8 @@ python -m src.db.loader --db-path outro_caminho/dados.db
 | Ficheiro | Descrição |
 |----------|-----------|
 | `newsdata_{endpoint}_raw_{timestamp}.json` | JSON original da API (raw) |
-| `newsdata_{endpoint}_tabular_{timestamp}.csv` | Dados tabulares (DataFrame) |
+| `newsdata_{endpoint}_tabular_{timestamp}.csv` | Dados tabulares CSV (DataFrame) |
+| `newsdata_{endpoint}_tabular_{timestamp}.parquet` | Dados tabulares Parquet (DataFrame) |
 | `wiki_scrape_raw_{timestamp}.json` | JSON original Wikipedia (raw) |
 | `wiki_scrape_tabular_{timestamp}.csv` | Dados tabulares Wikipedia |
 
@@ -216,7 +219,7 @@ Duplicados são ignorados automaticamente (`INSERT OR IGNORE` por `pageid`).
 
 **NewsData.io:**
 ```
-API → JSON (raw) → DataFrame → CSV → SQLite (opcional)
+API → JSON (raw) → DataFrame → CSV + Parquet → SQLite (opcional)
 ```
 
 **Wikipedia:**

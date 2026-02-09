@@ -15,6 +15,7 @@ from src.bronze.ingest import (
     json_to_dataframe,
     salvar_json_raw,
     salvar_csv,
+    salvar_parquet,
 )
 
 
@@ -101,14 +102,14 @@ class TestJsonToDataframe:
     def test_trata_listas_como_string(self, mock_api_response):
         """Testa que converte listas para strings"""
         df = json_to_dataframe(mock_api_response)
-        
-        # Categorias são lista → string
+
+        # Categorias sao lista -> string
         assert df.iloc[0]["category"] == "technology, business"
         assert df.iloc[1]["category"] == "sports"
-        
-        # Creator pode ser None
+
+        # Creator pode ser None/NaN
         assert df.iloc[0]["creator"] == "João Silva"
-        assert df.iloc[1]["creator"] is None
+        assert pd.isna(df.iloc[1]["creator"])
     
     def test_resultados_vazios(self):
         """Testa resposta sem resultados"""
@@ -124,33 +125,50 @@ class TestJsonToDataframe:
 
 class TestSalvarFicheiros:
     """Testes para salvar ficheiros"""
-    
+
     def test_salvar_json_raw(self, mock_api_response, temp_output):
         """Testa salvar JSON raw"""
         timestamp = "20240115T103000Z"
-        
-        path = salvar_json_raw(mock_api_response, temp_output, timestamp)
-        
+        endpoint = "latestPT"
+
+        path = salvar_json_raw(mock_api_response, temp_output, timestamp, endpoint)
+
         assert path.exists()
-        assert path.name == f"newsdata_raw_{timestamp}.json"
-        
-        # Verificar conteúdo
+        assert path.name == f"newsdata_{endpoint}_raw_{timestamp}.json"
+
+        # Verificar conteudo
         with open(path, "r", encoding="utf-8") as f:
             loaded = json.load(f)
         assert loaded["status"] == "success"
-    
+
     def test_salvar_csv(self, mock_api_response, temp_output):
         """Testa salvar CSV"""
         df = json_to_dataframe(mock_api_response)
         timestamp = "20240115T103000Z"
-        
-        path = salvar_csv(df, temp_output, timestamp)
-        
+        endpoint = "latestPT"
+
+        path = salvar_csv(df, temp_output, timestamp, endpoint)
+
         assert path.exists()
-        assert path.name == f"newsdata_tabular_{timestamp}.csv"
-        
-        # Verificar conteúdo
+        assert path.name == f"newsdata_{endpoint}_tabular_{timestamp}.csv"
+
+        # Verificar conteudo
         loaded = pd.read_csv(path)
+        assert len(loaded) == 2
+
+    def test_salvar_parquet(self, mock_api_response, temp_output):
+        """Testa salvar Parquet"""
+        df = json_to_dataframe(mock_api_response)
+        timestamp = "20240115T103000Z"
+        endpoint = "latestPT"
+
+        path = salvar_parquet(df, temp_output, timestamp, endpoint)
+
+        assert path.exists()
+        assert path.name == f"newsdata_{endpoint}_tabular_{timestamp}.parquet"
+
+        # Verificar conteudo
+        loaded = pd.read_parquet(path)
         assert len(loaded) == 2
 
 
@@ -160,7 +178,7 @@ class TestSalvarFicheiros:
 
 class TestFetchNews:
     """Testes para fetch_news com mock"""
-    
+
     @patch("src.bronze.ingest.requests.get")
     def test_fetch_sucesso(self, mock_get, mock_api_response):
         """Testa request bem-sucedido"""
@@ -168,16 +186,16 @@ class TestFetchNews:
         mock_response.status_code = 200
         mock_response.json.return_value = mock_api_response
         mock_get.return_value = mock_response
-        
+
         result = fetch_news(
             api_key="test_key",
-            base_url="https://api.test.com",
+            endpoint="latestPT",
             country="pt"
         )
-        
+
         assert result["status"] == "success"
         assert len(result["results"]) == 2
-    
+
     @patch("src.bronze.ingest.requests.get")
     def test_fetch_erro(self, mock_get):
         """Testa tratamento de erro da API"""
@@ -185,51 +203,93 @@ class TestFetchNews:
         mock_response.status_code = 401
         mock_response.text = "Invalid API key"
         mock_get.return_value = mock_response
-        
+
         with pytest.raises(Exception, match="Erro na API"):
             fetch_news(
                 api_key="invalid_key",
-                base_url="https://api.test.com"
+                endpoint="latestPT"
             )
+
+    @patch("src.bronze.ingest.requests.get")
+    def test_fetch_diferentes_endpoints(self, mock_get, mock_api_response):
+        """Testa diferentes endpoints"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = mock_api_response
+        mock_get.return_value = mock_response
+
+        for endpoint in ["latestPT", "tech", "crypto", "market"]:
+            result = fetch_news(api_key="test_key", endpoint=endpoint)
+            assert result["status"] == "success"
 
 
 # ============================================================================
-# TESTES DE INTEGRAÇÃO
+# TESTES DE INTEGRACAO
 # ============================================================================
 
 class TestIntegracao:
-    """Testes de integração do pipeline completo"""
-    
+    """Testes de integracao do pipeline completo"""
+
     @patch("src.bronze.ingest.requests.get")
     def test_pipeline_completo(self, mock_get, mock_api_response, temp_output):
-        """Testa pipeline: API → JSON → DataFrame → CSV"""
+        """Testa pipeline: API -> JSON -> DataFrame -> CSV + Parquet"""
         # Setup mock
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = mock_api_response
         mock_get.return_value = mock_response
-        
+
         timestamp = "20240115T103000Z"
-        
+        endpoint = "latestPT"
+
         # 1. Fetch
         data = fetch_news(
             api_key="test_key",
-            base_url="https://api.test.com"
+            endpoint=endpoint
         )
-        
+
         # 2. Salvar JSON
-        json_path = salvar_json_raw(data, temp_output, timestamp)
-        
+        json_path = salvar_json_raw(data, temp_output, timestamp, endpoint)
+
         # 3. Converter
         df = json_to_dataframe(data)
-        
+
         # 4. Salvar CSV
-        csv_path = salvar_csv(df, temp_output, timestamp)
-        
-        # Verificações
+        csv_path = salvar_csv(df, temp_output, timestamp, endpoint)
+
+        # 5. Salvar Parquet
+        parquet_path = salvar_parquet(df, temp_output, timestamp, endpoint)
+
+        # Verificacoes
         assert json_path.exists()
         assert csv_path.exists()
+        assert parquet_path.exists()
         assert len(df) == 2
+
+        # Verificar que os dados sao consistentes
+        csv_loaded = pd.read_csv(csv_path)
+        parquet_loaded = pd.read_parquet(parquet_path)
+        assert len(csv_loaded) == len(parquet_loaded) == 2
+
+    @patch("src.bronze.ingest.requests.get")
+    def test_pipeline_sem_resultados(self, mock_get, temp_output):
+        """Testa pipeline com resposta vazia da API"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "status": "success",
+            "totalResults": 0,
+            "results": []
+        }
+        mock_get.return_value = mock_response
+
+        timestamp = "20240115T103000Z"
+        endpoint = "latestPT"
+
+        data = fetch_news(api_key="test_key", endpoint=endpoint)
+        df = json_to_dataframe(data)
+
+        assert df.empty
 
 
 if __name__ == "__main__":

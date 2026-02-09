@@ -12,6 +12,7 @@ Uso:
 """
 
 import argparse
+import io
 import json
 import os
 import sys
@@ -21,6 +22,12 @@ from pathlib import Path
 import requests
 import pandas as pd
 from dotenv import load_dotenv
+
+# Forcar UTF-8 no stdout/stderr (Windows cp1252 nao suporta caracteres especiais)
+if sys.stdout.encoding != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if sys.stderr.encoding != "utf-8":
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
 # ============================================================================
@@ -64,7 +71,7 @@ ENDPOINTS = {
 
 
 # ============================================================================
-# 1️⃣ CONFIGURAÇÃO
+# [1] CONFIGURACAO
 # ============================================================================
 
 def carregar_config() -> dict:
@@ -73,21 +80,21 @@ def carregar_config() -> dict:
     project_root = Path(__file__).parent.parent.parent
     env_path = project_root / ".env"
     load_dotenv(env_path)
-    
+
     api_key = os.getenv("NEWSDATA_API_KEY", "")
     if not api_key:
         raise ValueError(
-            "❌ NEWSDATA_API_KEY não configurada!\n"
-            "   Cria um ficheiro .env com: NEWSDATA_API_KEY=your_key"
+            "[ERRO] NEWSDATA_API_KEY nao configurada!\n"
+            "       Cria um ficheiro .env com: NEWSDATA_API_KEY=your_key"
         )
-    
+
     return {
         "api_key": api_key,
     }
 
 
 # ============================================================================
-# 2️⃣ REQUEST NA API
+# [2] REQUEST NA API
 # ============================================================================
 
 def fetch_news(
@@ -138,9 +145,9 @@ def fetch_news(
     if query:
         params["q"] = query
     
-    print(f"📡 A fazer request para {base_url}")
-    print(f"   Endpoint: {endpoint_config['nome']}")
-    print(f"   Parâmetros: {', '.join(f'{k}={v}' for k, v in params.items() if k != 'apikey')}")
+    print(f"[API] A fazer request para {base_url}")
+    print(f"      Endpoint: {endpoint_config['nome']}")
+    print(f"      Parametros: {', '.join(f'{k}={v}' for k, v in params.items() if k != 'apikey')}")
     
     response = requests.get(base_url, params=params, timeout=30)
     
@@ -153,7 +160,7 @@ def fetch_news(
 
 
 # ============================================================================
-# 3️⃣ SALVAR JSON RAW
+# [3] SALVAR JSON RAW
 # ============================================================================
 
 def salvar_json_raw(data: dict, output_dir: Path, timestamp: str, endpoint: str = "latest") -> Path:
@@ -174,12 +181,12 @@ def salvar_json_raw(data: dict, output_dir: Path, timestamp: str, endpoint: str 
     with open(raw_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     
-    print(f"💾 JSON raw guardado: {raw_path}")
+    print(f"[SAVE] JSON raw guardado: {raw_path}")
     return raw_path
 
 
 # ============================================================================
-# 4️⃣ CONVERTER JSON → DATAFRAME
+# [4] CONVERTER JSON -> DATAFRAME
 # ============================================================================
 
 def json_to_dataframe(data: dict) -> pd.DataFrame:
@@ -201,7 +208,7 @@ def json_to_dataframe(data: dict) -> pd.DataFrame:
     results = data.get("results", [])
     
     if not results:
-        print("⚠️  Nenhum resultado encontrado")
+        print("[AVISO] Nenhum resultado encontrado")
         return pd.DataFrame()
     
     rows = []
@@ -233,34 +240,59 @@ def json_to_dataframe(data: dict) -> pd.DataFrame:
         })
     
     df = pd.DataFrame(rows)
-    print(f"📊 DataFrame criado: {len(df)} linhas × {len(df.columns)} colunas")
+    print(f"[DATA] DataFrame criado: {len(df)} linhas x {len(df.columns)} colunas")
     
     return df
 
 
 # ============================================================================
-# 5️⃣ SALVAR CSV (BRONZE)
+# [5] SALVAR CSV (BRONZE)
 # ============================================================================
 
 def salvar_csv(df: pd.DataFrame, output_dir: Path, timestamp: str, endpoint: str = "latest") -> Path:
     """
     Salva DataFrame como CSV
-    
+
     Args:
         df: DataFrame com os dados
         output_dir: Pasta de output
         timestamp: Timestamp para o nome do ficheiro
         endpoint: Tipo de endpoint (latest, crypto)
-    
+
     Returns:
         Caminho do ficheiro guardado
     """
     csv_path = output_dir / f"newsdata_{endpoint}_tabular_{timestamp}.csv"
-    
+
     df.to_csv(csv_path, index=False, encoding="utf-8")
-    
-    print(f"💾 CSV tabular guardado: {csv_path}")
+
+    print(f"[SAVE] CSV tabular guardado: {csv_path}")
     return csv_path
+
+
+# ============================================================================
+# [6] SALVAR PARQUET (BRONZE)
+# ============================================================================
+
+def salvar_parquet(df: pd.DataFrame, output_dir: Path, timestamp: str, endpoint: str = "latest") -> Path:
+    """
+    Salva DataFrame como Parquet
+
+    Args:
+        df: DataFrame com os dados
+        output_dir: Pasta de output
+        timestamp: Timestamp para o nome do ficheiro
+        endpoint: Tipo de endpoint (latest, crypto)
+
+    Returns:
+        Caminho do ficheiro guardado
+    """
+    parquet_path = output_dir / f"newsdata_{endpoint}_tabular_{timestamp}.parquet"
+
+    df.to_parquet(parquet_path, index=False, engine="pyarrow")
+
+    print(f"[SAVE] Parquet tabular guardado: {parquet_path}")
+    return parquet_path
 
 
 # ============================================================================
@@ -319,30 +351,30 @@ Exemplos:
 
 def main() -> int:
     """Pipeline Bronze principal"""
-    
+
     print("\n" + "=" * 60)
-    print("    🥉 NEWSDATA.IO – PIPELINE BRONZE")
+    print("    NEWSDATA.IO - PIPELINE BRONZE")
     print("=" * 60 + "\n")
-    
+
     args = parse_args()
-    
+
     try:
-        # 1️⃣ Carregar configuração
-        print("1️⃣  A carregar configuração...")
+        # [1] Carregar configuracao
+        print("[1] A carregar configuracao...")
         config = carregar_config()
         
-        # 2️⃣ Criar pasta collection/bronze
+        # [2] Criar pasta collection/bronze
         project_root = Path(__file__).parent.parent.parent
         output_dir = project_root / "collection" / "bronze"
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Timestamp no formato do formador
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        print(f"   Timestamp: {timestamp}")
-        print(f"   Endpoint: {ENDPOINTS[args.endpoint]['nome']}\n")
-        
-        # 3️⃣ Request na API
-        print("2️⃣  A fazer request na API...")
+        print(f"    Timestamp: {timestamp}")
+        print(f"    Endpoint: {ENDPOINTS[args.endpoint]['nome']}\n")
+
+        # [3] Request na API
+        print("[2] A fazer request na API...")
         
         # Para crypto e market, não enviamos country (usam parâmetros próprios)
         skip_country = args.endpoint in ["crypto", "market"]
@@ -362,45 +394,52 @@ def main() -> int:
         # Verificar status
         status = data.get("status")
         total = data.get("totalResults", 0)
-        print(f"   Status: {status}")
-        print(f"   Total resultados: {total}\n")
-        
-        # 4️⃣ Salvar JSON raw
-        print("3️⃣  A salvar JSON raw...")
+        print(f"    Status: {status}")
+        print(f"    Total resultados: {total}\n")
+
+        # [4] Salvar JSON raw
+        print("[3] A salvar JSON raw...")
         raw_path = salvar_json_raw(data, output_dir, timestamp, args.endpoint)
-        
-        # 5️⃣ Converter para DataFrame
-        print("\n4️⃣  A converter JSON → DataFrame...")
+
+        # [5] Converter para DataFrame
+        print("\n[4] A converter JSON -> DataFrame...")
         df = json_to_dataframe(data)
-        
+
         if not df.empty:
             # Mostrar preview
-            print("\n   Preview:")
+            print("\n    Preview:")
             print(df[["title", "source_id", "pubDate"]].head().to_string(index=False))
-        
-        # 6️⃣ Salvar CSV
-        print("\n5️⃣  A salvar CSV (bronze tabular)...")
+
+        # [6] Salvar CSV
+        print("\n[5] A salvar CSV (bronze tabular)...")
         csv_path = salvar_csv(df, output_dir, timestamp, args.endpoint)
-        
-        # ✅ Conclusão
+
+        # [7] Salvar Parquet
+        print("\n[6] A salvar Parquet (bronze tabular)...")
+        parquet_path = salvar_parquet(df, output_dir, timestamp, args.endpoint)
+
+        # Conclusao
         print("\n" + "=" * 60)
-        print("✅ PIPELINE BRONZE EXECUTADA COM SUCESSO!")
+        print("[OK] PIPELINE BRONZE EXECUTADA COM SUCESSO!")
         print("=" * 60)
         print(f"""
-   Endpoint: {ENDPOINTS[args.endpoint]['nome']}
-   Ficheiros gerados em: {output_dir}
-   
-   📄 {raw_path.name}
-      → JSON original da API (raw)
-   
-   📊 {csv_path.name}
-      → Dados tabulares ({len(df)} registos)
+    Endpoint: {ENDPOINTS[args.endpoint]['nome']}
+    Ficheiros gerados em: {output_dir}
 
-   Pipeline: API → JSON (raw) → DataFrame → CSV
+    [JSON] {raw_path.name}
+           -> JSON original da API (raw)
+
+    [CSV] {csv_path.name}
+          -> Dados tabulares CSV ({len(df)} registos)
+
+    [PARQUET] {parquet_path.name}
+              -> Dados tabulares Parquet ({len(df)} registos)
+
+    Pipeline: API -> JSON (raw) -> DataFrame -> CSV + Parquet
 """)
 
         # Perguntar se quer carregar na DB
-        resposta = input("🗄️  Carregar dados na base de dados SQLite? (s/N): ").strip().lower()
+        resposta = input("[DB] Carregar dados na base de dados SQLite? (s/N): ").strip().lower()
         if resposta == "s":
             import sqlite3
             from src.db.loader import criar_tabela, carregar_csv as db_carregar_csv
@@ -413,18 +452,18 @@ def main() -> int:
             criar_tabela(conn)
             db_carregar_csv(conn, csv_path, args.endpoint)
             conn.close()
-            print(f"✅ Dados carregados em {db_path}")
+            print(f"[OK] Dados carregados em {db_path}")
 
         return 0
-        
+
     except ValueError as e:
         print(f"\n{e}")
         return 1
     except requests.RequestException as e:
-        print(f"\n❌ Erro de conexão: {e}")
+        print(f"\n[ERRO] Erro de conexao: {e}")
         return 1
     except Exception as e:
-        print(f"\n❌ Erro inesperado: {e}")
+        print(f"\n[ERRO] Erro inesperado: {e}")
         return 1
 
 

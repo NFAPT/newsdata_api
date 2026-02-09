@@ -60,7 +60,7 @@ def obter_urls(idioma: str = "pt") -> tuple[str, str]:
 
 
 # ============================================================================
-# 1️⃣ OBTER PÁGINAS POR TEMA
+# [1] OBTER PAGINAS POR TEMA
 # ============================================================================
 
 def pesquisar_por_tema(tema: str, api_url: str, limite: int = MAX_PAGINAS) -> list[str]:
@@ -97,7 +97,7 @@ def pesquisar_por_tema(tema: str, api_url: str, limite: int = MAX_PAGINAS) -> li
 
 
 # ============================================================================
-# 2️⃣ OBTER PÁGINAS ALEATÓRIAS
+# [2] OBTER PAGINAS ALEATORIAS
 # ============================================================================
 
 def obter_aleatorias(api_url: str, limite: int = MAX_PAGINAS) -> list[str]:
@@ -134,7 +134,7 @@ def obter_aleatorias(api_url: str, limite: int = MAX_PAGINAS) -> list[str]:
 
 
 # ============================================================================
-# 3️⃣ EXTRAIR URLs MANUAIS
+# [3] EXTRAIR URLs MANUAIS
 # ============================================================================
 
 def extrair_titulos_de_urls(urls: list[str]) -> list[str]:
@@ -161,7 +161,7 @@ def extrair_titulos_de_urls(urls: list[str]) -> list[str]:
 
 
 # ============================================================================
-# 4️⃣ EXTRAIR RESUMO DE UMA PÁGINA
+# [4] EXTRAIR RESUMO DE UMA PAGINA
 # ============================================================================
 
 def extrair_resumo(titulo: str, rest_url: str) -> dict | None:
@@ -196,7 +196,7 @@ def extrair_resumo(titulo: str, rest_url: str) -> dict | None:
 
 
 # ============================================================================
-# 5️⃣ SCRAPING COMPLETO
+# [5] SCRAPING COMPLETO
 # ============================================================================
 
 def scrape_paginas(titulos: list[str], rest_url: str) -> list[dict]:
@@ -226,7 +226,7 @@ def scrape_paginas(titulos: list[str], rest_url: str) -> list[dict]:
 
 
 # ============================================================================
-# 6️⃣ SALVAR JSON RAW
+# [6] SALVAR JSON RAW
 # ============================================================================
 
 def salvar_json_raw(data: list[dict], output_dir: Path, timestamp: str) -> Path:
@@ -251,7 +251,7 @@ def salvar_json_raw(data: list[dict], output_dir: Path, timestamp: str) -> Path:
 
 
 # ============================================================================
-# 7️⃣ CONVERTER PARA DATAFRAME + SALVAR CSV
+# [7] CONVERTER PARA DATAFRAME + SALVAR CSV
 # ============================================================================
 
 def resultados_to_dataframe(resultados: list[dict]) -> pd.DataFrame:
@@ -294,7 +294,7 @@ def salvar_csv(df: pd.DataFrame, output_dir: Path, timestamp: str) -> Path:
 
 
 # ============================================================================
-# 8️⃣ BASE DE DADOS SQLITE
+# [8] BASE DE DADOS SQLITE
 # ============================================================================
 
 SQL_CRIAR_TABELA_WIKI = """
