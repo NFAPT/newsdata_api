@@ -246,7 +246,74 @@ def json_to_dataframe(data: dict) -> pd.DataFrame:
 
 
 # ============================================================================
-# [5] SALVAR CSV (BRONZE)
+# [5] VERIFICAR DUPLICADOS
+# ============================================================================
+
+def obter_article_ids_existentes(output_dir: Path, endpoint: str) -> set:
+    """
+    Extrai article_ids de ficheiros Parquet existentes para o endpoint.
+
+    Args:
+        output_dir: Pasta com os ficheiros bronze
+        endpoint: Tipo de endpoint (latestPT, crypto, etc.)
+
+    Returns:
+        Set com article_ids já guardados
+    """
+    article_ids = set()
+
+    # Procurar ficheiros Parquet do mesmo endpoint
+    pattern = f"newsdata_{endpoint}_tabular_*.parquet"
+    ficheiros = list(output_dir.glob(pattern))
+
+    for ficheiro in ficheiros:
+        try:
+            # Ler apenas a coluna article_id (mais eficiente)
+            df_existing = pd.read_parquet(ficheiro, columns=["article_id"])
+            ids = df_existing["article_id"].dropna().tolist()
+            article_ids.update(ids)
+        except Exception as e:
+            print(f"   [AVISO] Erro ao ler {ficheiro.name}: {e}")
+
+    return article_ids
+
+
+def filtrar_duplicados(df: pd.DataFrame, output_dir: Path, endpoint: str) -> pd.DataFrame:
+    """
+    Remove artigos que já existem em ficheiros anteriores.
+
+    Args:
+        df: DataFrame com novos artigos
+        output_dir: Pasta com os ficheiros bronze
+        endpoint: Tipo de endpoint
+
+    Returns:
+        DataFrame apenas com artigos novos
+    """
+    if df.empty:
+        return df
+
+    ids_existentes = obter_article_ids_existentes(output_dir, endpoint)
+
+    if not ids_existentes:
+        print(f"   Nenhum ficheiro anterior encontrado - todos os artigos são novos")
+        return df
+
+    total_antes = len(df)
+    df_novos = df[~df["article_id"].isin(ids_existentes)]
+    total_depois = len(df_novos)
+
+    duplicados = total_antes - total_depois
+    if duplicados > 0:
+        print(f"   [DEDUP] Removidos {duplicados} artigos duplicados ({total_depois} novos de {total_antes})")
+    else:
+        print(f"   [DEDUP] Todos os {total_antes} artigos são novos")
+
+    return df_novos
+
+
+# ============================================================================
+# [6] SALVAR CSV (BRONZE)
 # ============================================================================
 
 def salvar_csv(df: pd.DataFrame, output_dir: Path, timestamp: str, endpoint: str = "latest") -> Path:
@@ -410,13 +477,34 @@ def main() -> int:
             print("\n    Preview:")
             print(df[["title", "source_id", "pubDate"]].head().to_string(index=False))
 
-        # [6] Salvar CSV
-        print("\n[5] A salvar CSV (bronze tabular)...")
-        csv_path = salvar_csv(df, output_dir, timestamp, args.endpoint)
+        # [6] Verificar duplicados
+        print("\n[5] A verificar duplicados...")
+        df_novos = filtrar_duplicados(df, output_dir, args.endpoint)
 
-        # [7] Salvar Parquet
-        print("\n[6] A salvar Parquet (bronze tabular)...")
-        parquet_path = salvar_parquet(df, output_dir, timestamp, args.endpoint)
+        # Se todos os artigos forem duplicados, nao criar ficheiros tabulares
+        if df_novos.empty and not df.empty:
+            print("\n" + "=" * 60)
+            print("[INFO] NENHUM ARTIGO NOVO ENCONTRADO")
+            print("=" * 60)
+            print(f"""
+    Endpoint: {ENDPOINTS[args.endpoint]['nome']}
+    Artigos da API: {len(df)}
+    Artigos novos: 0
+
+    [JSON] {raw_path.name}
+           -> JSON original da API guardado (para referencia)
+
+    Nenhum ficheiro CSV/Parquet criado (sem dados novos).
+""")
+            return 0
+
+        # [7] Salvar CSV
+        print("\n[6] A salvar CSV (bronze tabular)...")
+        csv_path = salvar_csv(df_novos, output_dir, timestamp, args.endpoint)
+
+        # [8] Salvar Parquet
+        print("\n[7] A salvar Parquet (bronze tabular)...")
+        parquet_path = salvar_parquet(df_novos, output_dir, timestamp, args.endpoint)
 
         # Conclusao
         print("\n" + "=" * 60)
@@ -430,12 +518,12 @@ def main() -> int:
            -> JSON original da API (raw)
 
     [CSV] {csv_path.name}
-          -> Dados tabulares CSV ({len(df)} registos)
+          -> Dados tabulares CSV ({len(df_novos)} registos novos)
 
     [PARQUET] {parquet_path.name}
-              -> Dados tabulares Parquet ({len(df)} registos)
+              -> Dados tabulares Parquet ({len(df_novos)} registos novos)
 
-    Pipeline: API -> JSON (raw) -> DataFrame -> CSV + Parquet
+    Pipeline: API -> JSON (raw) -> DataFrame -> Dedup -> CSV + Parquet
 """)
 
         # Perguntar se quer carregar na DB
